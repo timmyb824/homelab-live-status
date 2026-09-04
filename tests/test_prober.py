@@ -14,6 +14,7 @@ from homelab_live_status.models import (
     Status,
 )
 from homelab_live_status.prober import (
+    HTTP_TIMEOUT,
     build_dns_query,
     is_up,
     probe_all,
@@ -24,6 +25,8 @@ from homelab_live_status.prober import (
 
 HTTP_OK = 200
 DNS_HEADER_BYTES = 12
+HTTP_CONNECT_TIMEOUT = 5
+HTTP_READ_TIMEOUT = 15
 
 
 def make_service(name: str, url: str) -> Service:
@@ -202,3 +205,14 @@ async def test_probe_clears_error_on_success() -> None:
         result = await probe_one(client, service, asyncio.Semaphore(1))
     assert result.probe is not None
     assert result.probe.last_error is None
+
+
+def test_http_timeout_allows_longer_read_than_connect() -> None:
+    """HTTP probes use a longer read timeout (15s) than connect (5s).
+
+    Cloudflare-tunneled public apps need more time for the response body to
+    arrive than a LAN-local connect does.  This guards against regressions
+    that would reintroduce false-positive ReadTimeout failures.
+    """
+    assert HTTP_TIMEOUT.connect == HTTP_CONNECT_TIMEOUT
+    assert HTTP_TIMEOUT.read == HTTP_READ_TIMEOUT

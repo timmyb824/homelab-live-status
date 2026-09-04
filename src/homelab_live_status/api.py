@@ -11,6 +11,9 @@ which file is mounted.
     CORS_ORIGINS   comma-separated allowed origins (default: none). Set only on
                    the public instance so the status page on another domain
                    (e.g. a GitHub Pages site) can fetch the API.
+    SERVE_CONSOLE  when "1", serve the internal operator console at "/".
+                   Set only on the internal instance — the console renders
+                   full-snapshot detail (internal URLs, upstreams, IPs).
 """
 
 import os
@@ -22,6 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from homelab_live_status.models import Event, Snapshot
 
 DEFAULT_SNAPSHOT_FILE = "/data/snapshot.json"
+CONSOLE_HTML = Path(__file__).parent / "console.html"
 
 app = FastAPI(
     title="Homelab Live-Status API",
@@ -61,6 +65,18 @@ def load_snapshot() -> Snapshot:
         raise HTTPException(
             status_code=503, detail="snapshot unreadable (corrupt or in-flight write)"
         ) from None
+
+
+@app.get("/", include_in_schema=False)
+def console() -> Response:
+    """Serve the internal operator console when SERVE_CONSOLE=1; 404 otherwise."""
+    if os.environ.get("SERVE_CONSOLE") != "1":
+        raise HTTPException(status_code=404)
+    return Response(
+        CONSOLE_HTML.read_text(),
+        media_type="text/html",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/api/health")

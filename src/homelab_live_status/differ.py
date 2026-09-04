@@ -3,7 +3,7 @@
 Each collector run diffs the fresh state against the previous snapshot:
 
 - new ids -> `added`, missing ids -> `removed` (immediate; deliberate changes)
-- probe-based status flips are debounced asymmetrically: 2 consecutive failed
+- probe-based status flips are debounced asymmetrically: 3 consecutive failed
   polls -> `down` event and status flip; 1 success -> `up` (immediate recovery,
   a successful probe is unambiguous)
 - platform-derived node status flips (Proxmox offline, k3s NotReady) fire
@@ -25,7 +25,7 @@ from homelab_live_status.models import (
     Status,
 )
 
-DOWN_THRESHOLD = 2
+DOWN_THRESHOLD = 3
 MAX_EVENTS = 200
 MAX_EVENT_AGE = timedelta(days=30)
 
@@ -174,7 +174,7 @@ def diff_probed_items(
 
 def diff_nodes(
     current_nodes: list[Node], previous_nodes: list[Node], now: datetime
-) -> list[Event]:
+) -> list[Event]:  # sourcery skip: for-append-to-extend
     """Diff platform-derived node status — flips fire immediately."""
     previous_by_id = {node.id: node for node in previous_nodes}
     events: list[Event] = []

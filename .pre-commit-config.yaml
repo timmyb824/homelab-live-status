@@ -6,7 +6,7 @@ repos:
         args: [--diff=git diff HEAD, --no-summary, src/]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.5
+    rev: v0.16.6
     hooks:
       - id: ruff-check
         args: [--fix]
@@ -26,13 +26,13 @@ repos:
       - id: mixed-line-ending
 
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.12.7
+    rev: 0.12.9
     hooks:
       - id: uv-lock
       - id: uv-export
 
   - repo: https://github.com/trufflesecurity/trufflehog
-    rev: v3.97.1
+    rev: v3.97.4
     hooks:
       - id: trufflehog
         name: TruffleHog
@@ -67,6 +67,6 @@ repos:
           ]
 
   - repo: https://github.com/timmyb824/sops-file-encryption-check
-    rev: latest
+    rev: v1.0.0
     hooks:
       - id: sops-encryption-check

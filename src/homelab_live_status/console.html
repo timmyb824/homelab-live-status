@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Homelab Live Status (internal)</title>
+  <link rel="icon"
+    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='24' fill='%2322c55e'/%3E%3C/svg%3E" />
+  <style>
+    :root {
+      --bg: #0b0f16;
+      --panel: #0f1724;
+      --panel2: #0c1320;
+      --text: #e7eefc;
+      --muted: #9fb0cf;
+      --border: rgba(159, 176, 207, .16);
+      --accent: #66e3ff;
+      --accent2: #a78bfa;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.5;
+      font-size: 14px;
+    }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(7, 10, 16, .85);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    header h1 {
+      font-size: 16px;
+      margin: 0;
+    }
+
+    header .sub {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .badges {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-left: auto;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: rgba(15, 23, 36, .7);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      flex: none;
+    }
+
+    .dot.up {
+      background: var(--ok);
+      box-shadow: 0 0 0 3px rgba(34, 197, 94, .15);
+    }
+
+    .dot.down {
+      background: var(--bad);
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, .15);
+    }
+
+    main {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 20px 24px 60px;
+    }
+
+    #sources {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+
+    .src {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--panel2);
+    }
+
+    .src.ok {
+      color: var(--ok);
+    }
+
+    .src.err {
+      color: var(--bad);
+    }
+
+    h2 {
+      font-size: 14px;
+      margin: 26px 0 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .cols {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    @media (max-width: 900px) {
+      .cols {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    td,
+    th {
+      text-align: left;
+      padding: 5px 8px;
+      border-bottom: 1px solid rgba(159, 176, 207, .08);
+      vertical-align: middle;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    td.num {
+      color: var(--muted);
+    }
+
+    .pill {
+      font-size: 11px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .pill.synced,
+    .pill.healthy {
+      color: var(--ok);
+      border-color: rgba(34, 197, 94, .3);
+    }
+
+    .pill.outofsync,
+    .pill.degraded,
+    .pill.progressing {
+      color: var(--warn);
+      border-color: rgba(245, 158, 11, .3);
+    }
+
+    .detail {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    #events {
+      max-height: 420px;
+      overflow-y: auto;
+    }
+
+    .ev {
+      display: flex;
+      gap: 10px;
+      padding: 6px 8px;
+      border-bottom: 1px solid rgba(159, 176, 207, .08);
+      align-items: baseline;
+    }
+
+    .ev .t {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .ev .type {
+      width: 76px;
+      flex: none;
+      text-align: center;
+    }
+
+    .type.added,
+    .type.up {
+      color: var(--ok);
+    }
+
+    .type.removed,
+    .type.down {
+      color: var(--bad);
+    }
+
+    .type.changed {
+      color: var(--warn);
+    }
+
+    #search {
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 7px 12px;
+      font-size: 13px;
+      width: 240px;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>Homelab Live Status</h1>
+    <span class="sub mono">internal view · <span id="updated">loading…</span></span>
+    <input id="search" type="search" placeholder="filter services…" aria-label="Filter services" />
+    <div class="badges">
+      <span class="badge"><span id="overall-dot" class="dot up"></span><span id="overall-text">…</span></span>
+      <span class="badge" id="svc-summary">services --/--</span>
+      <span class="badge" id="infra-summary">infra --/--</span>
+    </div>
+  </header>
+
+  <main>
+    <div id="sources"></div>
+
+    <h2>Services</h2>
+    <div class="cols">
+      <div>
+        <table id="svc-k8s">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Kubernetes (<span id="count-k8s">-</span>)</th>
+              <th>Probe</th>
+              <th>ArgoCD</th>
+              <th>Upstream</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div>
+        <table id="svc-ext">
+          <thead>
+            <tr>
+              <th></th>
+              <th>External (<span id="count-ext">-</span>)</th>
+              <th>Probe</th>
+              <th></th>
+              <th>Upstream</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <h2>Infrastructure</h2>
+    <div class="cols">
+      <div>
+        <table id="hosts">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Hosts (<span id="count-hosts">-</span>)</th>
+              <th>IP</th>
+              <th>Probe</th>
+              <th>Up since</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div>
+        <table id="nodes">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Nodes (<span id="count-nodes">-</span>)</th>
+              <th>Type</th>
+              <th>Role</th>
+              <th>Uptime/Age</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <h2>Event feed</h2>
+    <div id="events"></div>
+  </main>
+
+  <script>
+    (function () {
+      var REFRESH_MS = 60000;
+      var requestGen = 0;
+
+      function el(id) { return document.getElementById(id); }
+      function make(tag, cls, text) {
+        var n = document.createElement(tag);
+        if (cls) n.className = cls;
+        if (text != null) n.textContent = text;
+        return n;
+      }
+      function cell(tr, node) { var td = document.createElement("td"); if (node) td.appendChild(node); tr.appendChild(td); }
+      function dot(status) { return make("span", "dot " + (status === "up" ? "up" : "down")); }
+      function pill(text, cls) { return make("span", ("pill " + (cls || "")).trim(), text); }
+
+      function timeAgo(iso) {
+        var t = new Date(iso).getTime();
+        if (isNaN(t)) return "";
+        var mins = Math.max(0, Math.round((Date.now() - t) / 60000));
+        if (mins < 1) return "just now";
+        if (mins < 60) return mins + "m ago";
+        var h = Math.round(mins / 60);
+        if (h < 24) return h + "h ago";
+        return Math.round(h / 24) + "d ago";
+      }
+      function fmtDate(iso) {
+        var d = new Date(iso);
+        return isNaN(d.getTime()) ? "" : d.toLocaleString();
+      }
+
+      function link(url, text) {
+        if (!/^https?:\/\//i.test(url || "")) return make("span", null, text);
+        var a = make("a", null, text);
+        a.href = url;
+        return a;
+      }
+
+      function probeCell(p) {
+        if (!p) return make("span", "detail", "-");
+        var bits = [p.type];
+        if (p.last_status_code != null) bits.push(String(p.last_status_code));
+        if (p.last_error) bits.push(p.last_error);
+        var span = make("span", "detail mono", bits.join(" "));
+        span.title = p.target + (p.consecutive_failures ? " (fails: " + p.consecutive_failures + ")" : "");
+        return span;
+      }
+
+      function argocdCell(platform) {
+        var a = platform && platform.argocd;
+        if (!a) return make("span", "detail", "-");
+        var wrap = make("span");
+        wrap.appendChild(pill(a.sync, a.sync.toLowerCase()));
+        wrap.appendChild(document.createTextNode(" "));
+        wrap.appendChild(pill(a.health, a.health.toLowerCase()));
+        if (a.revision) {
+          wrap.title = "rev " + a.revision;
+        }
+        return wrap;
+      }
+
+      function serviceRow(s) {
+        var tr = document.createElement("tr");
+        tr.dataset.name = s.name.toLowerCase();
+        cell(tr, dot(s.status));
+        var nameCell = make("span");
+        nameCell.appendChild(link(s.url, s.name));
+        if (s.url) {
+          nameCell.appendChild(make("div", "detail mono", s.url.replace(/^https?:\/\//, "")));
+        }
+        cell(tr, nameCell);
+        cell(tr, probeCell(s.probe));
+        cell(tr, argocdCell(s.platform));
+        cell(tr, make("span", "detail mono", (s.metadata && s.metadata.upstream) || "-"));
+        return tr;
+      }
+
+      function hostRow(h) {
+        var tr = document.createElement("tr");
+        cell(tr, dot(h.status));
+        var nameCell = make("span");
+        nameCell.appendChild(make("span", null, h.name));
+        if (h.metadata && h.metadata.rewrite) {
+          nameCell.appendChild(make("div", "detail mono", h.metadata.rewrite));
+        }
+        cell(tr, nameCell);
+        cell(tr, make("span", "detail mono", (h.metadata && h.metadata.ip) || "-"));
+        cell(tr, probeCell(h.probe));
+        cell(tr, make("span", "detail", h.up_since ? timeAgo(h.up_since) : "-"));
+        return tr;
+      }
+
+      function longevity(n) {
+        if (n.uptime_seconds != null) return (n.uptime_seconds / 86400).toFixed(1) + "d up";
+        if (n.created_at) {
+          var days = Math.floor((Date.now() - new Date(n.created_at).getTime()) / 86400000);
+          return days >= 365 ? (days / 365).toFixed(1) + "y old" : days + "d old";
+        }
+        return "-";
+      }
+
+      function nodeRow(n) {
+        var tr = document.createElement("tr");
+        cell(tr, dot(n.status));
+        cell(tr, make("span", null, n.name));
+        cell(tr, pill(n.type === "proxmox_node" ? "proxmox" : "k3s"));
+        cell(tr, n.role ? pill(n.role) : make("span", "detail", "-"));
+        cell(tr, make("span", "detail mono", longevity(n)));
+        return tr;
+      }
+
+      function fillTable(id, items, rowFn) {
+        var tbody = el(id).querySelector("tbody");
+        tbody.replaceChildren.apply(tbody, items.map(rowFn));
+      }
+
+      function upCount(items) {
+        return items.filter(function (i) { return i.status === "up"; }).length;
+      }
+
+      function render(snapshot, events) {
+        var services = snapshot.services || [];
+        var hosts = snapshot.hosts || [];
+        var nodes = snapshot.nodes || [];
+        var k8s = services.filter(function (s) { return s.group === "Kubernetes"; });
+        var ext = services.filter(function (s) { return s.group !== "Kubernetes"; });
+
+        fillTable("svc-k8s", k8s, serviceRow);
+        fillTable("svc-ext", ext, serviceRow);
+        fillTable("hosts", hosts, hostRow);
+        fillTable("nodes", nodes, nodeRow);
+
+        el("count-k8s").textContent = upCount(k8s) + "/" + k8s.length;
+        el("count-ext").textContent = upCount(ext) + "/" + ext.length;
+        el("count-hosts").textContent = upCount(hosts) + "/" + hosts.length;
+        el("count-nodes").textContent = upCount(nodes) + "/" + nodes.length;
+
+        var infra = hosts.concat(nodes);
+        el("svc-summary").textContent = "services " + upCount(services) + "/" + services.length;
+        el("infra-summary").textContent = "infra " + upCount(infra) + "/" + infra.length;
+        var allUp = upCount(services) === services.length && upCount(infra) === infra.length
+          && services.length + infra.length > 0;
+        el("overall-text").textContent = allUp ? "operational" : "degraded";
+        el("overall-dot").className = "dot " + (allUp ? "up" : "down");
+
+        var srcWrap = el("sources");
+        srcWrap.replaceChildren();
+        Object.keys(snapshot.sources || {}).forEach(function (name) {
+          var h = snapshot.sources[name];
+          var s = make("span", "src " + (h.ok ? "ok" : "err"),
+            name + (h.ok ? " ok" : " FAILED: " + (h.error || "")));
+          s.title = "last poll " + fmtDate(h.last_poll);
+          srcWrap.appendChild(s);
+        });
+
+        el("updated").textContent = "snapshot " + timeAgo(snapshot.generated_at) +
+          " (" + fmtDate(snapshot.generated_at) + ") · v" + snapshot.collector_version;
+
+        var evWrap = el("events");
+        evWrap.replaceChildren.apply(evWrap, (events || []).map(function (e) {
+          var div = make("div", "ev");
+          div.appendChild(pill(e.type, "type " + e.type));
+          div.appendChild(make("span", null, e.summary));
+          div.appendChild(make("span", "t mono", timeAgo(e.timestamp)));
+          return div;
+        }));
+      }
+
+      function renderUnreachable(err) {
+        el("overall-text").textContent = "API unreachable";
+        el("overall-dot").className = "dot down";
+        el("updated").textContent = String(err);
+      }
+
+      function load() {
+        var gen = ++requestGen;
+        var statusReq = fetch("/api/v1/status", { cache: "no-store" }).then(function (r) {
+          if (!r.ok) throw new Error("status " + r.status);
+          return r.json();
+        });
+        var eventsReq = fetch("/api/v1/events", { cache: "no-store" }).then(function (r) {
+          if (!r.ok) throw new Error("events " + r.status);
+          return r.json();
+        }).catch(function () { return []; });
+        statusReq.then(function (snapshot) {
+          return eventsReq.then(function (events) { return [snapshot, events]; });
+        }).then(function (results) {
+          if (gen !== requestGen) return;
+          render(results[0], results[1]);
+        }).catch(function (err) {
+          if (gen !== requestGen) return;
+          renderUnreachable(err);
+        });
+      }
+
+      el("search").addEventListener("input", function (e) {
+        var q = e.target.value.toLowerCase();
+        ["svc-k8s", "svc-ext"].forEach(function (id) {
+          el(id).querySelectorAll("tbody tr").forEach(function (tr) {
+            tr.style.display = !q || tr.dataset.name.indexOf(q) !== -1 ? "" : "none";
+          });
+        });
+      });
+
+      load();
+      setInterval(load, REFRESH_MS);
+    })();
+  </script>
+</body>
+
+</html>

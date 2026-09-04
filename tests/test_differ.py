@@ -28,7 +28,7 @@ T0 = datetime(2026, 8, 24, 12, 0, tzinfo=UTC)
 T1 = T0 + timedelta(minutes=5)
 T2 = T1 + timedelta(minutes=5)
 
-DOWN_FAILURES = 2
+DOWN_FAILURES = 3
 
 
 def make_service(name: str, status: Status, failures: int = 0) -> Service:
@@ -73,9 +73,20 @@ def test_single_failure_is_a_blip_not_an_event() -> None:
     assert current[0].probe.consecutive_failures == 1
 
 
-def test_second_failure_flips_down_with_event() -> None:
-    """Two consecutive failed polls flip status to down and fire an event."""
+def test_second_failure_is_a_blip_not_an_event() -> None:
+    """Two consecutive failed polls still hold the previous status at threshold 3."""
     previous = [make_service("app", Status.UP, failures=1)]
+    current = [make_service("app", Status.DOWN)]
+    events = diff_probed_items(current, previous, T1)
+    assert events == []
+    assert current[0].status == Status.UP
+    assert current[0].probe is not None
+    assert current[0].probe.consecutive_failures == DOWN_FAILURES - 1
+
+
+def test_third_failure_flips_down_with_event() -> None:
+    """Three consecutive failed polls flip status to down and fire an event."""
+    previous = [make_service("app", Status.UP, failures=2)]
     current = [make_service("app", Status.DOWN)]
     events = diff_probed_items(current, previous, T1)
     assert current[0].status == Status.DOWN
@@ -88,7 +99,7 @@ def test_second_failure_flips_down_with_event() -> None:
 
 def test_single_success_recovers_immediately() -> None:
     """One success after down flips up immediately and sets up_since."""
-    previous = [make_service("app", Status.DOWN, failures=2)]
+    previous = [make_service("app", Status.DOWN, failures=3)]
     current = [make_service("app", Status.UP)]
     events = diff_probed_items(current, previous, T1)
     assert current[0].status == Status.UP
@@ -241,7 +252,7 @@ def test_argocd_absent_on_either_side_fires_nothing() -> None:
 
 def test_down_summary_names_probe_target_and_error() -> None:
     """The down event says WHAT failed: probe type, target, and reason."""
-    previous = [make_service("app", Status.UP, failures=1)]
+    previous = [make_service("app", Status.UP, failures=2)]
     current = [make_service("app", Status.DOWN)]
     current[0].probe.last_error = "ReadTimeout"
     events = diff_probed_items(current, previous, T1)
@@ -254,7 +265,7 @@ def test_down_summary_names_probe_target_and_error() -> None:
 
 def test_recovered_summary_names_probe_target() -> None:
     """The recovery event names the probe that succeeded."""
-    previous = [make_service("app", Status.DOWN, failures=2)]
+    previous = [make_service("app", Status.DOWN, failures=3)]
     current = [make_service("app", Status.UP)]
     events = diff_probed_items(current, previous, T1)
     assert events[0].summary == (
