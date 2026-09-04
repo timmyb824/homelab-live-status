@@ -113,6 +113,36 @@ def test_interactive_docs_disabled(client: TestClient) -> None:
     assert client.get("/docs").status_code == HTTP_404
 
 
+def test_console_404_without_enable(client: TestClient) -> None:
+    """The operator console is not served unless SERVE_CONSOLE=1."""
+    assert client.get("/").status_code == HTTP_404
+
+
+def test_console_served_when_enabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With SERVE_CONSOLE=1, / serves the console HTML (no-store)."""
+    import importlib
+
+    import homelab_live_status.api as api_module
+
+    path = tmp_path / "snapshot.json"
+    path.write_text(_snapshot().model_dump_json())
+    monkeypatch.setenv("SNAPSHOT_FILE", str(path))
+    monkeypatch.setenv("SERVE_CONSOLE", "1")
+    importlib.reload(api_module)
+    try:
+        console_client = TestClient(api_module.app)
+        response = console_client.get("/")
+        assert response.status_code == 200  # noqa: PLR2004
+        assert response.headers["Cache-Control"] == "no-store"
+        assert "Homelab Live Status" in response.text
+        assert "/api/v1/status" in response.text
+    finally:
+        monkeypatch.delenv("SERVE_CONSOLE")
+        importlib.reload(api_module)
+
+
 def test_cors_disabled_by_default(client: TestClient) -> None:
     """Without CORS_ORIGINS, cross-origin requests get no allow header."""
     response = client.get("/api/health", headers={"Origin": "https://example.com"})

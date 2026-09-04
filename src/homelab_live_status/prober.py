@@ -19,7 +19,12 @@ from homelab_live_status.models import Probe, ProbeType, Status
 
 DOWN_STATUS_CODES = frozenset({502, 503, 504})
 
+# TCP/DNS probes are LAN-local — 5s is plenty. HTTP probes traverse the
+# Cloudflare tunnel for public apps, which adds a round-trip hop; a 5s read
+# timeout causes false-positive ReadTimeout failures under concurrent load.
+# Keep connect tight (5s) but give the response body 15s to arrive.
 PROBE_TIMEOUT = 5
+HTTP_TIMEOUT = httpx.Timeout(connect=5, read=15, write=5, pool=5)
 MAX_CONCURRENT = 20
 DNS_HEADER_BYTES = 12
 
@@ -49,7 +54,7 @@ async def probe_http(client: httpx.AsyncClient, probe: Probe) -> Status:
     try:
         response = await client.get(
             probe.target,
-            timeout=PROBE_TIMEOUT,
+            timeout=HTTP_TIMEOUT,
             follow_redirects=False,
         )
         probe.last_status_code = response.status_code
@@ -139,8 +144,8 @@ async def probe_one(
 async def probe_all(client: httpx.AsyncClient, items: list[T]) -> list[T]:
     """Probe all items concurrently, bounded by a semaphore.
 
-    Probing must be concurrent: ~90 sequential probes with 5s timeouts could
-    exceed the 5-minute collection interval in the worst case.
+    Probing must be concurrent: ~90 sequential probes with 5-15s timeouts
+    could exceed the 5-minute collection interval in the worst case.
     """
     semaphore = asyncio.Semaphore(MAX_CONCURRENT)
     return await asyncio.gather(*(probe_one(client, item, semaphore) for item in items))
